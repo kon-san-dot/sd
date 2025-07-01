@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Image Prompt Builder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+
+    .layout {
+      display: flex;
+      gap: 40px;
+      align-items: flex-start;
+    }
+
+    .left-column {
+      flex: 2;
+    }
+
+    .right-column {
+      flex: 1;
+    }
+
+    .category-container {
+      margin-bottom: 20px;
+    }
+
+    .tag-container {
+      border: 1px solid #ccc;
+      padding: 5px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      max-width: 600px;
+      position: relative;
+      background-color: white;
+    }
+
+    .tag {
+      background-color: #007BFF;
+      color: white;
+      padding: 5px 10px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .tag .remove {
+      margin-left: 8px;
+      cursor: pointer;
+    }
+
+    .tag-input {
+      border: none;
+      flex: 1;
+      padding: 5px;
+      min-width: 150px;
+      outline: none;
+    }
+
+    .autocomplete-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      max-height: 150px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ccc;
+      z-index: 1000;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .autocomplete-item {
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+
+    .autocomplete-item:hover {
+      background-color: #f0f0f0;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 400px;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      resize: none;
+      box-sizing: border-box;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Image Prompt Builder</h1>
+
+<div class="layout">
+  <div class="left-column" id="form"></div>
+  <div class="right-column">
+    <label for="summary">Prompt Output</label>
+    <textarea id="summary" readonly></textarea>
+  </div>
+</div>
+
+<script>
+  const categories = [
+    { id: "subject", label: "Subject/Scene", tags: [], isFreeText: true },
+    { id: "medium", label: "Medium", tags: ["oil painting", "digital art", "watercolor", "charcoal", "3D render", "photography", "ink", "pixel art"] },
+    { id: "style", label: "Style", tags: ["realism", "impressionism", "minimalism", "surrealism", "anime", "cyberpunk", "baroque", "concept art"] },
+    { id: "artist", label: "Artist", tags: ["Van Gogh", "Picasso", "Da Vinci", "Banksy", "Hokusai", "Beeple", "Giger", "Kim Jung Gi"] },
+    { id: "platform", label: "Website/Platform", tags: ["ArtStation", "Behance", "DeviantArt", "Instagram", "Pinterest", "Dribbble"] },
+    { id: "resolution", label: "Resolution", tags: ["8k", "4k", "HD", "1024x1024", "1920x1080", "300dpi", "print-ready"] },
+    { id: "lighting", label: "Lighting", tags: ["natural light", "studio light", "dramatic", "backlit", "sunset", "neon", "low key", "soft light"] },
+    { id: "palette", label: "Color palette", tags: ["monochrome", "vibrant", "pastel", "warm", "cool", "earth tones", "black and white"] },
+    { id: "details", label: "Additional Details", tags: ["highly detailed", "low poly", "bokeh", "motion blur", "isometric", "macro", "volumetric fog"] }
+  ];
+
+  const selectedTags = {};
+
+  const form = document.getElementById("form");
+  const summaryBox = document.getElementById("summary");
+
+  categories.forEach(cat => {
+    selectedTags[cat.id] = cat.isFreeText ? "" : [];
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "category-container";
+
+    const label = document.createElement("label");
+    label.textContent = cat.label;
+    label.setAttribute("for", `input-${cat.id}`);
+
+    const container = document.createElement("div");
+    container.className = "tag-container";
+    container.id = `container-${cat.id}`;
+
+    const input = document.createElement("input");
+    input.className = "tag-input";
+    input.setAttribute("placeholder", cat.isFreeText ? "Enter text..." : "Type to search...");
+    input.setAttribute("data-id", cat.id);
+
+    const autocomplete = document.createElement("div");
+    autocomplete.className = "autocomplete-list";
+    autocomplete.id = `autocomplete-${cat.id}`;
+
+    container.appendChild(input);
+    container.appendChild(autocomplete);
+
+    wrapper.appendChild(label);
+    wrapper.appendChild(container);
+    form.appendChild(wrapper);
+
+    if (cat.isFreeText) {
+      input.addEventListener("input", () => {
+        selectedTags[cat.id] = input.value.trim();
+        updateSummary();
+      });
+    } else {
+      input.addEventListener("input", () => {
+        const val = input.value.trim().toLowerCase();
+        const available = cat.tags.filter(t =>
+          t.toLowerCase().includes(val) && !selectedTags[cat.id].includes(t)
+        );
+
+        showAutocomplete(autocomplete, available, tag => {
+          selectedTags[cat.id].push(tag);
+          updateTagsDisplay(cat.id, container, input);
+          autocomplete.style.display = "none";
+          updateSummary();
+        });
+      });
+
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter" && input.value.trim()) {
+          const tag = input.value.trim();
+          if (cat.tags.includes(tag) && !selectedTags[cat.id].includes(tag)) {
+            selectedTags[cat.id].push(tag);
+            updateTagsDisplay(cat.id, container, input);
+            updateSummary();
+          }
+          input.value = "";
+          autocomplete.style.display = "none";
+          e.preventDefault();
+        }
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      if (!container.contains(e.target)) {
+        autocomplete.style.display = "none";
+      }
+    });
+  });
+
+  function showAutocomplete(autocompleteEl, matches, onSelect) {
+    autocompleteEl.innerHTML = "";
+    if (matches.length === 0) {
+      autocompleteEl.style.display = "none";
+      return;
+    }
+    matches.forEach(match => {
+      const item = document.createElement("div");
+      item.className = "autocomplete-item";
+      item.textContent = match;
+      item.addEventListener("click", () => onSelect(match));
+      autocompleteEl.appendChild(item);
+    });
+    autocompleteEl.style.display = "block";
+  }
+
+  function updateTagsDisplay(categoryId, container, inputEl) {
+    const existingTags = container.querySelectorAll(".tag");
+    existingTags.forEach(tag => tag.remove());
+
+    selectedTags[categoryId].forEach(tag => {
+      const tagEl = document.createElement("div");
+      tagEl.className = "tag";
+      tagEl.innerHTML = `${tag} <span class="remove">&times;</span>`;
+      tagEl.querySelector(".remove").addEventListener("click", () => {
+        selectedTags[categoryId] = selectedTags[categoryId].filter(t => t !== tag);
+        updateTagsDisplay(categoryId, container, inputEl);
+        updateSummary();
+      });
+      container.insertBefore(tagEl, inputEl);
+    });
+  }
+
+  function updateSummary() {
+    const output = [];
+
+    categories.forEach(cat => {
+      if (cat.isFreeText) {
+        if (selectedTags[cat.id]) {
+          output.push(selectedTags[cat.id]);
+        }
+      } else {
+        output.push(...selectedTags[cat.id]);
+      }
+    });
+
+    summaryBox.value = output.join(", ");
+  }
+</script>
+
+</body>
+</html>
