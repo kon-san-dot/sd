@@ -2,25 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Image Prompt Builder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Prompt Builder</title>
   <style>
+    :root {
+      --bg: #fefaf6;
+      --border: #ddd;
+      --tag-bg: #c5dedd;
+      --tag-text: #333;
+      --accent: #f3c5c5;
+      --hover: #f9e2e2;
+      --input-bg: #fffaf0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 30px;
+      font-family: 'Segoe UI', sans-serif;
+      margin: 20px;
+      background-color: var(--bg);
+      color: #333;
+    }
+
+    h1 {
+      text-align: center;
     }
 
     .layout {
       display: flex;
-      gap: 40px;
+      flex-direction: row;
+      gap: 30px;
       align-items: flex-start;
+      flex-wrap: wrap;
     }
 
     .left-column {
       flex: 2;
+      min-width: 300px;
     }
 
     .right-column {
       flex: 1;
+      min-width: 250px;
     }
 
     .category-container {
@@ -28,23 +53,24 @@
     }
 
     .tag-container {
-      border: 1px solid #ccc;
+      border: 1px solid var(--border);
       padding: 5px;
       display: flex;
       flex-wrap: wrap;
       gap: 5px;
-      max-width: 600px;
       position: relative;
-      background-color: white;
+      background-color: var(--input-bg);
+      border-radius: 6px;
     }
 
     .tag {
-      background-color: #007BFF;
-      color: white;
+      background-color: var(--tag-bg);
+      color: var(--tag-text);
       padding: 5px 10px;
       border-radius: 12px;
       display: inline-flex;
       align-items: center;
+      font-size: 0.9em;
     }
 
     .tag .remove {
@@ -55,9 +81,11 @@
     .tag-input {
       border: none;
       flex: 1;
-      padding: 5px;
-      min-width: 150px;
+      padding: 6px;
+      min-width: 120px;
       outline: none;
+      font-size: 1em;
+      background: transparent;
     }
 
     .autocomplete-list {
@@ -68,18 +96,19 @@
       max-height: 150px;
       overflow-y: auto;
       background: white;
-      border: 1px solid #ccc;
+      border: 1px solid var(--border);
       z-index: 1000;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 
     .autocomplete-item {
-      padding: 5px 10px;
+      padding: 6px 10px;
       cursor: pointer;
     }
 
-    .autocomplete-item:hover {
-      background-color: #f0f0f0;
+    .autocomplete-item:hover,
+    .autocomplete-item.active {
+      background-color: var(--hover);
     }
 
     label {
@@ -90,13 +119,33 @@
 
     textarea {
       width: 100%;
-      height: 400px;
+      height: 250px;
       font-family: monospace;
       font-size: 14px;
       padding: 10px;
-      border: 1px solid #ccc;
-      resize: none;
-      box-sizing: border-box;
+      border: 1px solid var(--border);
+      resize: vertical;
+      background-color: #fff;
+      border-radius: 6px;
+    }
+
+    @media (max-width: 768px) {
+      .layout {
+        flex-direction: column;
+      }
+
+      .right-column {
+        order: 2;
+      }
+
+      .left-column {
+        order: 1;
+      }
+
+      textarea {
+        margin-top: 30px;
+        height: 200px;
+      }
     }
   </style>
 </head>
@@ -126,7 +175,6 @@
   ];
 
   const selectedTags = {};
-
   const form = document.getElementById("form");
   const summaryBox = document.getElementById("summary");
 
@@ -148,6 +196,7 @@
     input.className = "tag-input";
     input.setAttribute("placeholder", cat.isFreeText ? "Enter text..." : "Type to search...");
     input.setAttribute("data-id", cat.id);
+    input.setAttribute("autocomplete", "off");
 
     const autocomplete = document.createElement("div");
     autocomplete.className = "autocomplete-list";
@@ -166,31 +215,48 @@
         updateSummary();
       });
     } else {
+      let currentFocus = -1;
+
       input.addEventListener("input", () => {
         const val = input.value.trim().toLowerCase();
         const available = cat.tags.filter(t =>
           t.toLowerCase().includes(val) && !selectedTags[cat.id].includes(t)
         );
-
+        currentFocus = -1;
         showAutocomplete(autocomplete, available, tag => {
           selectedTags[cat.id].push(tag);
           updateTagsDisplay(cat.id, container, input);
           autocomplete.style.display = "none";
+          input.value = "";
           updateSummary();
         });
       });
 
       input.addEventListener("keydown", e => {
-        if (e.key === "Enter" && input.value.trim()) {
-          const tag = input.value.trim();
-          if (cat.tags.includes(tag) && !selectedTags[cat.id].includes(tag)) {
-            selectedTags[cat.id].push(tag);
-            updateTagsDisplay(cat.id, container, input);
-            updateSummary();
-          }
-          input.value = "";
-          autocomplete.style.display = "none";
+        let items = autocomplete.querySelectorAll(".autocomplete-item");
+        if (e.key === "ArrowDown") {
+          currentFocus++;
+          highlight(items, currentFocus);
           e.preventDefault();
+        } else if (e.key === "ArrowUp") {
+          currentFocus--;
+          highlight(items, currentFocus);
+          e.preventDefault();
+        } else if (e.key === "Enter") {
+          if (currentFocus > -1 && items[currentFocus]) {
+            items[currentFocus].click();
+            e.preventDefault();
+          } else if (input.value.trim()) {
+            const tag = input.value.trim();
+            if (cat.tags.includes(tag) && !selectedTags[cat.id].includes(tag)) {
+              selectedTags[cat.id].push(tag);
+              updateTagsDisplay(cat.id, container, input);
+              updateSummary();
+              input.value = "";
+              autocomplete.style.display = "none";
+              e.preventDefault();
+            }
+          }
         }
       });
     }
@@ -202,10 +268,10 @@
     });
   });
 
-  function showAutocomplete(autocompleteEl, matches, onSelect) {
-    autocompleteEl.innerHTML = "";
+  function showAutocomplete(el, matches, onSelect) {
+    el.innerHTML = "";
     if (matches.length === 0) {
-      autocompleteEl.style.display = "none";
+      el.style.display = "none";
       return;
     }
     matches.forEach(match => {
@@ -213,9 +279,15 @@
       item.className = "autocomplete-item";
       item.textContent = match;
       item.addEventListener("click", () => onSelect(match));
-      autocompleteEl.appendChild(item);
+      el.appendChild(item);
     });
-    autocompleteEl.style.display = "block";
+    el.style.display = "block";
+  }
+
+  function highlight(items, index) {
+    items.forEach((item, i) => {
+      item.classList.toggle("active", i === index);
+    });
   }
 
   function updateTagsDisplay(categoryId, container, inputEl) {
@@ -237,17 +309,13 @@
 
   function updateSummary() {
     const output = [];
-
     categories.forEach(cat => {
       if (cat.isFreeText) {
-        if (selectedTags[cat.id]) {
-          output.push(selectedTags[cat.id]);
-        }
+        if (selectedTags[cat.id]) output.push(selectedTags[cat.id]);
       } else {
         output.push(...selectedTags[cat.id]);
       }
     });
-
     summaryBox.value = output.join(", ");
   }
 </script>
